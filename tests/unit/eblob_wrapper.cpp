@@ -10,36 +10,6 @@
 #include <vector>
 
 
-eblob_config make_default_config() {
-	std::string data_dir_template_("/tmp/eblob-test-XXXXXX");
-	std::string data_dir_{mkdtemp(&data_dir_template_.front())};
-	std::string data_path_{data_dir_ + "/data"};
-	std::string log_path_{data_dir_ + "/log.log"};
-	ioremap::eblob::eblob_logger *logger_ = new ioremap::eblob::eblob_logger(log_path_.c_str(), EBLOB_LOG_DEBUG);
-
-	eblob_config config;
-	config.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS | EBLOB_AUTO_INDEXSORT;
-	config.sync = -2;
-	config.log = logger_->log();
-	config.file = (char *)malloc(data_path_.size() + 1);
-	strcpy(config.file, data_path_.c_str());
-	config.blob_size = EBLOB_BLOB_DEFAULT_BLOB_SIZE;
-	config.records_in_blob = EBLOB_BLOB_DEFAULT_RECORDS_IN_BLOB;
-	config.defrag_percentage = EBLOB_DEFAULT_DEFRAG_PERCENTAGE;
-	config.defrag_timeout = EBLOB_DEFAULT_DEFRAG_TIMEOUT;
-	config.index_block_size = EBLOB_INDEX_DEFAULT_BLOCK_SIZE;
-	config.index_block_bloom_length = EBLOB_INDEX_DEFAULT_BLOCK_BLOOM_LENGTH;
-	config.blob_size_limit = UINT64_MAX;
-	config.defrag_time = EBLOB_DEFAULT_DEFRAG_TIME;
-	config.defrag_splay = EBLOB_DEFAULT_DEFRAG_SPLAY;
-	config.periodic_timeout = EBLOB_DEFAULT_PERIODIC_THREAD_TIMEOUT;
-	config.stat_id = 12345;
-	config.chunks_dir = (char *)malloc(data_dir_.size() + 1);
-	strcpy(config.chunks_dir, data_dir_.c_str());
-	return config;
-}
-
-
 item_t::item_t(uint64_t key_, const eblob_key &hashed_key_, const std::vector<char> &value_)
 : key(key_)
 , value(value_)
@@ -53,7 +23,7 @@ bool item_t::operator< (const item_t &rhs) const {
 }
 
 
-eblob_wrapper::eblob_wrapper(eblob_config config, bool cleanup_files_)
+eblob_wrapper::eblob_wrapper(eblob_config &config, bool cleanup_files_)
 	: default_config_(config)
 	, cleanup_files(cleanup_files_) {
 }

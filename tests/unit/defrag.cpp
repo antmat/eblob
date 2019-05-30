@@ -23,12 +23,14 @@
 #include <err.h>
 
 
-void initialize_eblob_config(eblob_config &config) {
-	config.blob_size = 10 * (1ULL << 30); // 10Gib
-	config.defrag_timeout = 0; // we don't want to autodefrag
-	config.defrag_time = 0;
-	config.defrag_splay = 0;
-	config.blob_flags |= EBLOB_USE_VIEWS;
+config_wrapper initialize_eblob_config_for_defrag() {
+	config_wrapper config;
+	config.get().blob_size = 10 * (1ULL << 30); // 10Gib
+	config.get().defrag_timeout = 0; // we don't want to autodefrag
+	config.get().defrag_time = 0;
+	config.get().defrag_splay = 0;
+	config.get().blob_flags |= EBLOB_USE_VIEWS;
+	return std::move(config);
 }
 
 
@@ -95,8 +97,7 @@ int iterate_callback(struct eblob_disk_control *dc,
 
 int datasort(eblob_wrapper &wrapper, const std::set<size_t> &indexes) {
 	size_t number_bases = indexes.size();
-	assert(!indexes.empty());
-	assert(*indices.rbegin() < number_bases);
+	BOOST_REQUIRE(!indexes.empty());
 
 	datasort_cfg dcfg;
 	memset(&dcfg, 0, sizeof(datasort_cfg));
@@ -161,10 +162,9 @@ BOOST_AUTO_TEST_CASE(first_base_sorted_second_base_unsorted) {
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE = RECORDS_IN_BLOB / 2;
 
-	auto config = make_default_config();
-	initialize_eblob_config(config);
-	config.records_in_blob = RECORDS_IN_BLOB;
-	eblob_wrapper wrapper(config);
+	auto config = initialize_eblob_config_for_defrag();
+	config.get().records_in_blob = RECORDS_IN_BLOB;
+	eblob_wrapper wrapper(config.get());
 	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
@@ -208,10 +208,9 @@ BOOST_AUTO_TEST_CASE(merge_sorted_and_unsorted_bases) {
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = make_default_config();
-	initialize_eblob_config(config);
-	config.records_in_blob = RECORDS_IN_BLOB;
-	eblob_wrapper wrapper(config);
+	auto config = initialize_eblob_config_for_defrag();
+	config.get().records_in_blob = RECORDS_IN_BLOB;
+	eblob_wrapper wrapper(config.get());
 	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
@@ -261,10 +260,9 @@ BOOST_AUTO_TEST_CASE(merge_sorted_and_sorted_bases) {
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = make_default_config();
-	initialize_eblob_config(config);
-	config.records_in_blob = RECORDS_IN_BLOB;
-	eblob_wrapper wrapper(config);
+	auto config = initialize_eblob_config_for_defrag();
+	config.get().records_in_blob = RECORDS_IN_BLOB;
+	eblob_wrapper wrapper(config.get());
 	wrapper.start();
 
 	BOOST_REQUIRE(wrapper.get() != nullptr);
@@ -314,10 +312,9 @@ BOOST_AUTO_TEST_CASE(merge_unsorted_and_unsorted_bases) {
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = make_default_config();
-	initialize_eblob_config(config);
-	config.records_in_blob = RECORDS_IN_BLOB;
-	eblob_wrapper wrapper(config);
+	auto config = initialize_eblob_config_for_defrag();
+	config.get().records_in_blob = RECORDS_IN_BLOB;
+	eblob_wrapper wrapper(config.get());
 	wrapper.start();
 
 	BOOST_REQUIRE(wrapper.get() != nullptr);
@@ -363,10 +360,9 @@ BOOST_AUTO_TEST_CASE(remove_bases) {
 	const size_t TOTAL_RECORDS = 3 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE = 2 * RECORDS_IN_BLOB;
 
-	auto config = make_default_config();
-	initialize_eblob_config(config);
-	config.records_in_blob = RECORDS_IN_BLOB;
-	eblob_wrapper wrapper(config);
+	auto config = initialize_eblob_config_for_defrag();
+	config.get().records_in_blob = RECORDS_IN_BLOB;
+	eblob_wrapper wrapper(config.get());
 
 	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
