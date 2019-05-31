@@ -168,10 +168,9 @@ void run_with_different_modes(std::function<void(const eblob_config &)> runnable
 
 	// Enable views
 	BOOST_TEST_CHECKPOINT("running with enabled views");
-	cw.reset_dirs();
 	runnable(cw.config);
 
-	// no views at all
+	// disable views
 	BOOST_TEST_CHECKPOINT("running with views disabled");
 	cw.reset_dirs();
 	cw.config.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS;

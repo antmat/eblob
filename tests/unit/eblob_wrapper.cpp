@@ -10,7 +10,8 @@
 #include <vector>
 
 
-eblob_config_test_wrapper::eblob_config_test_wrapper() {
+eblob_config_test_wrapper::eblob_config_test_wrapper(bool cleanup_files)
+: cleanup_files_(cleanup_files) {
 	reset_dirs();
 	config.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS | EBLOB_AUTO_INDEXSORT;
 	config.sync = -2;
@@ -27,7 +28,18 @@ eblob_config_test_wrapper::eblob_config_test_wrapper() {
 	config.stat_id = 12345;
 }
 
+eblob_config_test_wrapper::~eblob_config_test_wrapper() {
+	cleanup_files();
+}
+
+void eblob_config_test_wrapper::cleanup_files() {
+	if (cleanup_files_ && !data_dir_.empty()) {
+		boost::filesystem::remove_all(data_dir_);
+	}
+}
+
 void eblob_config_test_wrapper::reset_dirs() {
+	cleanup_files();
 	data_dir_template_ = "/tmp/eblob-test-XXXXXX";
 	data_dir_ = mkdtemp(&data_dir_template_.front());
 	data_path_ = data_dir_ + "/data";
@@ -50,17 +62,13 @@ bool item_t::operator< (const item_t &rhs) const {
 }
 
 
-eblob_wrapper::eblob_wrapper(eblob_config config, bool cleanup_files)
-: config_(config)
-, cleanup_files_(cleanup_files) {
+eblob_wrapper::eblob_wrapper(eblob_config config)
+: config_(config) {
 	backend_ = eblob_init(&config_);
 }
 
 eblob_wrapper::~eblob_wrapper() {
 	eblob_cleanup(backend_);
-	if (cleanup_files_) {
-		boost::filesystem::remove_all(config_.chunks_dir);
-	}
 }
 
 void eblob_wrapper::restart() {

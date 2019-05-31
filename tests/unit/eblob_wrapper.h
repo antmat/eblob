@@ -13,16 +13,25 @@
 
 class eblob_config_test_wrapper {
 public:
-	eblob_config_test_wrapper();
+	eblob_config_test_wrapper(bool cleanup_files = true);
+	~eblob_config_test_wrapper();
+
 	eblob_config_test_wrapper(const eblob_config_test_wrapper &) = delete;
 	eblob_config_test_wrapper &operator=(const eblob_config_test_wrapper &) = delete;
+
 	eblob_config_test_wrapper(eblob_config_test_wrapper &&) = default;
 	eblob_config_test_wrapper &operator=(eblob_config_test_wrapper &&) = default;
+
 	void reset_dirs();
+
+private:
+	void cleanup_files();
 
 public:
 	eblob_config config;
+
 private:
+	bool cleanup_files_;
 	std::string data_dir_template_;
 	std::string data_dir_;
 	std::string data_path_;
@@ -47,7 +56,7 @@ public:
 
 class eblob_wrapper {
 public:
-	explicit eblob_wrapper(eblob_config config, bool cleanup_files_ = true);
+	explicit eblob_wrapper(eblob_config config);
 
 	eblob_wrapper(const eblob_wrapper &) = delete;
 
@@ -68,7 +77,6 @@ public:
 private:
 	eblob_config config_;
 	eblob_backend *backend_ = nullptr;
-	bool cleanup_files_ = true;
 };
 
 
