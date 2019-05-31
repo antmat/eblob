@@ -576,9 +576,10 @@ static int datasort_add_view_chunk(struct datasort_cfg *dcfg, struct eblob_base_
 
 	struct datasort_chunk *chunk = calloc(1, sizeof(*chunk));
 	if (chunk == NULL) {
-		EBLOB_WARNC(dcfg->log, EBLOB_LOG_ERROR, errno,
+		err = -errno;
+		EBLOB_WARNC(dcfg->log, EBLOB_LOG_ERROR, -err,
 			    "defrag: add_view_chunk: can't allocate memory for datasort_chunk");
-		return -errno;
+		return err;
 	}
 
 	eblob_base_wait_locked(bctl);
@@ -594,10 +595,10 @@ static int datasort_add_view_chunk(struct datasort_cfg *dcfg, struct eblob_base_
 	chunk->count = chunk->index_size;
 	chunk->index = calloc(chunk->count, sizeof(struct eblob_disk_control));
 	if (chunk->index == NULL) {
+		err = -errno;
 		EBLOB_WARNX(dcfg->log, EBLOB_LOG_ERROR,
 			    "defrag: load_index: can't allocate memory for index of size %zd",
 			    chunk->count * sizeof(struct eblob_disk_control));
-		err = -errno;
 		goto err_out;
 	}
 

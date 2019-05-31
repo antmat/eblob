@@ -25,7 +25,6 @@ add_custom_target(test_corruption
                   COMMAND "${CMAKE_CURRENT_BINARY_DIR}/eblob_corruption_test"
                   DEPENDS ${TESTS_DEPS} eblob_corruption_test)
 
-
 add_executable(eblob_defrag_test unit/defrag.cpp unit/eblob_wrapper.cpp)
 target_link_libraries(eblob_defrag_test eblob ${Boost_LIBRARIES})
 add_custom_target(test_defrag

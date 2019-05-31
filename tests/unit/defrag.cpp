@@ -30,14 +30,15 @@ config_wrapper initialize_eblob_config_for_defrag() {
 	config.get().defrag_time = 0;
 	config.get().defrag_splay = 0;
 	config.get().blob_flags |= EBLOB_USE_VIEWS;
+	config.get().records_in_blob = 200;
 	return std::move(config);
 }
 
 
 void fill_eblob(eblob_wrapper &wrapper,
-		std::vector<item_t> &shadow_elems,
-		item_generator &generator,
-		size_t total_records) {
+                std::vector<item_t> &shadow_elems,
+                item_generator &generator,
+                size_t total_records) {
 	for (size_t index = 0; index != total_records; ++index) {
 		shadow_elems.push_back(generator.generate_item(index));
 		BOOST_REQUIRE_EQUAL(wrapper.insert_item(shadow_elems.back()), 0);
@@ -45,18 +46,10 @@ void fill_eblob(eblob_wrapper &wrapper,
 }
 
 
-void init_datasort_cfg(eblob_wrapper &wrapper, datasort_cfg &cfg) {
-	memset(&cfg, 0, sizeof(cfg));
-	cfg.b = wrapper.get();
-	cfg.log = cfg.b->cfg.log;
-}
-
-
 class iterator_private {
 public:
 	explicit iterator_private(std::vector<item_t> &items_)
-	: items(items_)
-	{
+	: items(items_) {
 	}
 
 	std::vector<item_t> &items;
@@ -65,12 +58,11 @@ public:
 
 
 int iterate_callback(struct eblob_disk_control *dc,
-		     struct eblob_ram_control *rctl __attribute_unused__,
-		     int fd,
-		     uint64_t data_offset,
-		     void *priv,
-		     void *thread_priv __attribute_unused__)
-{
+                     struct eblob_ram_control *rctl __attribute_unused__,
+                     int fd,
+                     uint64_t data_offset,
+                     void *priv,
+                     void *thread_priv __attribute_unused__) {
 	// TODO: BOOST_REQUIRE_EQUAL used because of 54-th version of boost
 	// Maybe it will be more comfortable with BOOST_TEST and error messages in more modern boost version.
 	BOOST_REQUIRE(!(dc->flags & BLOB_DISK_CTL_REMOVE));  // removed dc occured
@@ -87,7 +79,7 @@ int iterate_callback(struct eblob_disk_control *dc,
 	std::vector<char> data(dc->data_size);
 	int ret = __eblob_read_ll(fd, data.data(), dc->data_size, data_offset);
 	BOOST_REQUIRE(ret == 0);  // can't read data
-	BOOST_REQUIRE(data == item.value);  // contet of value differ
+	BOOST_REQUIRE(data == item.value);  // content of the value differs
 
 	item.checked = true;
 	++ipriv.number_checked;
@@ -99,32 +91,32 @@ int datasort(eblob_wrapper &wrapper, const std::set<size_t> &indexes) {
 	size_t number_bases = indexes.size();
 	BOOST_REQUIRE(!indexes.empty());
 
-	datasort_cfg dcfg;
-	memset(&dcfg, 0, sizeof(datasort_cfg));
-	std::vector<eblob_base_ctl *> bctls(number_bases);
+	std::vector<eblob_base_ctl *> bctls;
+	bctls.reserve(number_bases);
 	eblob_base_ctl *bctl;
-	size_t index = 0;
 	size_t loop_index = 0;
 	list_for_each_entry(bctl, &wrapper.get()->bases, base_entry) {
 		if (indexes.count(loop_index)) {
-			bctls[index] = bctl;
-			++index;
+			bctls.emplace_back(bctl);
 		}
 
 		++loop_index;
-		if (index == number_bases)
+		if (bctls.size() == number_bases)
 			break;
 	}
 
-	init_datasort_cfg(wrapper, dcfg);
+	BOOST_REQUIRE(bctls.size() == number_bases);
+	datasort_cfg dcfg;
+	memset(&dcfg, 0, sizeof(dcfg));
+	dcfg.b = wrapper.get();
+	dcfg.log = dcfg.b->cfg.log;
 	dcfg.bctl = bctls.data();
 	dcfg.bctl_cnt = bctls.size();
 	return eblob_generate_sorted_data(&dcfg);
 }
 
 
-int iterate(eblob_wrapper &wrapper,
-	    iterator_private &priv) {
+int iterate(eblob_wrapper &wrapper, iterator_private &priv) {
 	eblob_index_block full_range;
 	memset(full_range.start_key.id, 0, EBLOB_ID_SIZE);
 	memset(full_range.end_key.id, 0xff, EBLOB_ID_SIZE);
@@ -158,14 +150,12 @@ int iterate(eblob_wrapper &wrapper,
  * 5) Check that bases contains all 150 records
  */
 BOOST_AUTO_TEST_CASE(first_base_sorted_second_base_unsorted) {
-	const size_t RECORDS_IN_BLOB = 100;
+	config_wrapper config = initialize_eblob_config_for_defrag();
+	const size_t RECORDS_IN_BLOB = config.get().records_in_blob;
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE = RECORDS_IN_BLOB / 2;
 
-	auto config = initialize_eblob_config_for_defrag();
-	config.get().records_in_blob = RECORDS_IN_BLOB;
 	eblob_wrapper wrapper(config.get());
-	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	item_generator generator(wrapper);
@@ -204,14 +194,12 @@ BOOST_AUTO_TEST_CASE(first_base_sorted_second_base_unsorted) {
  * 5) Check that result base contains 100 records
  */
 BOOST_AUTO_TEST_CASE(merge_sorted_and_unsorted_bases) {
-	const size_t RECORDS_IN_BLOB = 100;
+	config_wrapper config = initialize_eblob_config_for_defrag();
+	const size_t RECORDS_IN_BLOB = config.get().records_in_blob;
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = initialize_eblob_config_for_defrag();
-	config.get().records_in_blob = RECORDS_IN_BLOB;
 	eblob_wrapper wrapper(config.get());
-	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	item_generator generator(wrapper);
@@ -256,15 +244,12 @@ BOOST_AUTO_TEST_CASE(merge_sorted_and_unsorted_bases) {
  *  5) Check that result base contains 100 records
  */
 BOOST_AUTO_TEST_CASE(merge_sorted_and_sorted_bases) {
-	const size_t RECORDS_IN_BLOB = 100;
+	config_wrapper config = initialize_eblob_config_for_defrag();
+	const size_t RECORDS_IN_BLOB = config.get().records_in_blob;
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = initialize_eblob_config_for_defrag();
-	config.get().records_in_blob = RECORDS_IN_BLOB;
 	eblob_wrapper wrapper(config.get());
-	wrapper.start();
-
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	item_generator generator(wrapper);
@@ -308,15 +293,12 @@ BOOST_AUTO_TEST_CASE(merge_sorted_and_sorted_bases) {
  *  5) Check that result base contains 100 records
  */
 BOOST_AUTO_TEST_CASE(merge_unsorted_and_unsorted_bases) {
-	const size_t RECORDS_IN_BLOB = 100;
+	config_wrapper config = initialize_eblob_config_for_defrag();
+	const size_t RECORDS_IN_BLOB = config.get().records_in_blob;
 	const size_t TOTAL_RECORDS = 2 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE_IN_BASE = RECORDS_IN_BLOB / 2;
 
-	auto config = initialize_eblob_config_for_defrag();
-	config.get().records_in_blob = RECORDS_IN_BLOB;
 	eblob_wrapper wrapper(config.get());
-	wrapper.start();
-
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	item_generator generator(wrapper);
@@ -356,15 +338,12 @@ BOOST_AUTO_TEST_CASE(merge_unsorted_and_unsorted_bases) {
  *  5) Check that result base contains 100 records
  */
 BOOST_AUTO_TEST_CASE(remove_bases) {
-	const size_t RECORDS_IN_BLOB = 100;
+	config_wrapper config = initialize_eblob_config_for_defrag();
+	const size_t RECORDS_IN_BLOB = config.get().records_in_blob;
 	const size_t TOTAL_RECORDS = 3 * RECORDS_IN_BLOB;
 	const size_t RECORDS_TO_REMOVE = 2 * RECORDS_IN_BLOB;
 
-	auto config = initialize_eblob_config_for_defrag();
-	config.get().records_in_blob = RECORDS_IN_BLOB;
 	eblob_wrapper wrapper(config.get());
-
-	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	item_generator generator(wrapper);
@@ -383,10 +362,9 @@ BOOST_AUTO_TEST_CASE(remove_bases) {
 
 	// Defrag eblob (last base should not be touched)
 	BOOST_REQUIRE_EQUAL(eblob_defrag(wrapper.get()), 0);
-	shadow_elems.erase(shadow_elems.begin() + RECORDS_IN_BLOB, shadow_elems.begin() + 2 * RECORDS_IN_BLOB);
-	shadow_elems.erase(shadow_elems.begin(), shadow_elems.begin() + RECORDS_IN_BLOB);
+	shadow_elems.erase(shadow_elems.begin(), shadow_elems.begin() + RECORDS_TO_REMOVE);
 
 	iterator_private priv(shadow_elems);
 	BOOST_REQUIRE_EQUAL(iterate(wrapper, priv), 0);
-	BOOST_REQUIRE_EQUAL(priv.number_checked, TOTAL_RECORDS - 2 * RECORDS_IN_BLOB);
+	BOOST_REQUIRE_EQUAL(priv.number_checked, TOTAL_RECORDS - RECORDS_TO_REMOVE);
 }

@@ -12,8 +12,7 @@
 
 item_t::item_t(uint64_t key_, const eblob_key &hashed_key_, const std::vector<char> &value_)
 : key(key_)
-, value(value_)
-{
+, value(value_) {
 	memcpy(hashed_key.id, hashed_key_.id, EBLOB_ID_SIZE);
 }
 
@@ -23,9 +22,10 @@ bool item_t::operator< (const item_t &rhs) const {
 }
 
 
-eblob_wrapper::eblob_wrapper(eblob_config &config, bool cleanup_files_)
-	: default_config_(config)
-	, cleanup_files(cleanup_files_) {
+eblob_wrapper::eblob_wrapper(eblob_config &config, bool cleanup_files)
+: default_config_(config)
+, cleanup_files_(cleanup_files) {
+	start();
 }
 
 
@@ -53,25 +53,24 @@ void eblob_wrapper::stop() {
 
 eblob_wrapper::~eblob_wrapper() {
 	stop();
-	if (cleanup_files) {
+	if (cleanup_files_) {
 		boost::filesystem::remove_all(default_config_.chunks_dir);
 	}
 }
 
 
-eblob_backend* eblob_wrapper::get() {
+eblob_backend *eblob_wrapper::get() {
 	return backend_;
 }
 
 
-const eblob_backend* eblob_wrapper::get() const {
+const eblob_backend *eblob_wrapper::get() const {
 	return backend_;
 }
 
 
 int eblob_wrapper::insert_item(item_t &item) {
-	return eblob_write(get(), &item.hashed_key, item.value.data(), /* offset */ 0, item.value.size(),
-			   BLOB_DISK_CTL_APPEND);
+	return eblob_write(get(), &item.hashed_key, item.value.data(), /*offset*/ 0, item.value.size(), /*flags*/ 0);
 }
 
 
@@ -83,13 +82,13 @@ int eblob_wrapper::remove_item(item_t &item) {
 
 item_t item_generator::generate_item(uint64_t key) {
 	size_t datasize = 2 * (1 << 20);  // 2Mib
-	if (dist(gen) % 10 != 0) {  // 90% of probability
-		datasize = 1 + dist(gen) % (1 << 10);  // less or equal 1KiB
+	if (dist_(gen_) % 10 != 0) {  // 90% of probability
+		datasize = 1 + dist_(gen_) % (1 << 10);  // less or equal 1KiB
 	}
 
 	std::vector<char> data = generate_random_data(datasize);
 	struct eblob_key hashed_key;
-	eblob_hash(wrapper.get(), hashed_key.id, sizeof(hashed_key.id), &key, sizeof(key));
+	eblob_hash(wrapper_.get(), hashed_key.id, sizeof(hashed_key.id), &key, sizeof(key));
 	return item_t(key, hashed_key, data);
 }
 
@@ -97,13 +96,12 @@ item_t item_generator::generate_item(uint64_t key) {
 std::vector<char> item_generator::generate_random_data(size_t datasize) {
 	std::vector<char> data(datasize);
 	for (auto &element : data) {
-		element = dist(gen) % 26 + 'a';
+		element = dist_(gen_) % 26 + 'a';
 	}
 
 	return data;
 }
 
-uint64_t item_generator::DEFAULT_RANDOM_SEED = 42;
 
 eblob_key hash(std::string key) {
 	eblob_key ret;

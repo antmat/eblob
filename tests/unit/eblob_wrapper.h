@@ -2,21 +2,20 @@
 
 #include <boost/filesystem.hpp>
 
-#include <library/blob.h>
-
-#include "library/crypto/sha512.h"
-
 #include <eblob/eblob.hpp>
 
+#include <library/blob.h>
+#include <library/crypto/sha512.h>
+
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 
 class item_t {
 public:
 
-	item_t(uint64_t key_, const eblob_key &hashed_key_, const std::vector<char>& value_);
+	item_t(uint64_t key_, const eblob_key &hashed_key_, const std::vector<char> &value_);
 
 	bool operator< (const item_t &rhs) const;
 
@@ -40,8 +39,7 @@ public:
 		config_.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS | EBLOB_AUTO_INDEXSORT;
 		config_.sync = -2;
 		config_.log = logger_->log();
-		config_.file = static_cast<char*>(malloc(data_path_.size() + 1));
-		strcpy(config_.file, data_path_.c_str());
+		config_.file = const_cast<char*>(data_path_.c_str());
 		config_.blob_size = EBLOB_BLOB_DEFAULT_BLOB_SIZE;
 		config_.records_in_blob = EBLOB_BLOB_DEFAULT_RECORDS_IN_BLOB;
 		config_.defrag_percentage = EBLOB_DEFAULT_DEFRAG_PERCENTAGE;
@@ -53,23 +51,16 @@ public:
 		config_.defrag_splay = EBLOB_DEFAULT_DEFRAG_SPLAY;
 		config_.periodic_timeout = EBLOB_DEFAULT_PERIODIC_THREAD_TIMEOUT;
 		config_.stat_id = 12345;
-		config_.chunks_dir = static_cast<char*>(malloc(data_dir_.size() + 1));
-		strcpy(config_.chunks_dir, data_dir_.c_str());
+		config_.chunks_dir = const_cast<char*>(data_dir_.c_str());
 	}
 
 	config_wrapper(config_wrapper &&rhs) {
-		config_ = rhs.config_;
-		rhs.config_.file = nullptr;
-		rhs.config_.chunks_dir = nullptr;
+		data_dir_ = std::move(rhs.data_dir_);
+		data_path_ = std::move(rhs.data_path_);
+		log_path_ = std::move(rhs.log_path_);
 		logger_ = std::move(rhs.logger_);
+		config_ = rhs.config_;
 	};
-
-	//config_wrapper& operator=(config_wrapper &&rhs) = default;
-
-	~config_wrapper() {
-		free(config_.file);
-		free(config_.chunks_dir);
-	}
 
 	eblob_config& get() {
 		return config_;
@@ -79,7 +70,7 @@ public:
 		return config_;
 	}
 
-public:
+private:
 	std::string data_dir_template_ = "/tmp/eblob-test-XXXXXX";
 	std::string data_dir_;
 	std::string data_path_;
@@ -91,7 +82,7 @@ public:
 
 class eblob_wrapper {
 public:
-	explicit eblob_wrapper(eblob_config &config, bool cleanup_files_ = true);
+	explicit eblob_wrapper(eblob_config &config, bool cleanup_files = true);
 
 	void start(eblob_config *config = nullptr);
 
@@ -114,19 +105,18 @@ public:
 
 private:
 	eblob_backend *backend_ = nullptr;
-	bool cleanup_files = true;
+	bool cleanup_files_ = true;
 };
 
 
 class item_generator {
 public:
 
-	static uint64_t DEFAULT_RANDOM_SEED;
+	static constexpr uint64_t DEFAULT_RANDOM_SEED = 42;
 
-	explicit item_generator(eblob_wrapper &wrapper_, uint64_t seed_ = DEFAULT_RANDOM_SEED)
-	: wrapper(wrapper_)
-	, gen(std::mt19937(seed_))
-	{
+	explicit item_generator(eblob_wrapper &wrapper, uint64_t seed = DEFAULT_RANDOM_SEED)
+	: wrapper_(wrapper)
+	, gen_(std::mt19937(seed)) {
 	}
 
 	item_t generate_item(uint64_t key);
@@ -135,9 +125,9 @@ private:
 	std::vector<char> generate_random_data(size_t datasize);
 
 private:
-	eblob_wrapper &wrapper;
-	std::mt19937 gen;
-	std::uniform_int_distribution<unsigned> dist;
+	eblob_wrapper &wrapper_;
+	std::mt19937 gen_;
+	std::uniform_int_distribution<unsigned> dist_;
 };
 
 

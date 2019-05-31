@@ -313,7 +313,7 @@ static inline void eblob_convert_disk_control(struct eblob_disk_control *ctl)
  * Enable use of views over bases while sorting a blob instead of
  * splitting on chunks.
  */
-#define EBLOB_USE_VIEWS				(1<<12)
+#define EBLOB_USE_VIEWS			(1<<12)
 
 
 struct eblob_config {

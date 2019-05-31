@@ -19,7 +19,6 @@ BOOST_AUTO_TEST_CASE(test_header_corruption) {
 	 */
 	config_wrapper config;
 	eblob_wrapper wrapper(config.get());
-	wrapper.start();
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 0);
