@@ -17,8 +17,8 @@ BOOST_AUTO_TEST_CASE(test_header_corruption) {
 	/* corrupt record's header in blob and check that record isn't considered as corrupted (since data is correct)
 	 * and read is failed with -EINVAL
 	 */
-	config_wrapper config;
-	eblob_wrapper wrapper(config.get());
+	eblob_config_test_wrapper config_wrapper;
+	eblob_wrapper wrapper(config_wrapper.config);
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 0);
@@ -69,8 +69,8 @@ BOOST_AUTO_TEST_CASE(test_header_corruption) {
 
 BOOST_AUTO_TEST_CASE(test_data_corruption) {
 	/* corrupt record's data and check that the record is considered as corrupted */
-	config_wrapper config;
-	eblob_wrapper wrapper(config.get());
+	eblob_config_test_wrapper config_wrapper;
+	eblob_wrapper wrapper(config_wrapper.config);
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 0);
@@ -124,13 +124,12 @@ BOOST_AUTO_TEST_CASE(test_data_corruption) {
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 1);
 	BOOST_REQUIRE_EQUAL(eblob_remove(wrapper.get(), &key), 0);
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 0);
-	wrapper.stop();
 }
 
 BOOST_AUTO_TEST_CASE(test_footer_corruption) {
 	/* corrupt record's footer and check that the record is considered as corrupted */
-	config_wrapper config;
-	eblob_wrapper wrapper(config.get());
+	eblob_config_test_wrapper config_wrapper;
+	eblob_wrapper wrapper(config_wrapper.config);
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	BOOST_REQUIRE_EQUAL(eblob_stat_get(wrapper.get()->stat_summary, EBLOB_LST_RECORDS_CORRUPTED), 0);
@@ -183,8 +182,8 @@ BOOST_AUTO_TEST_CASE(test_footer_corruption) {
 }
 
 BOOST_AUTO_TEST_CASE(test_inspection) {
-	config_wrapper config;
-	eblob_wrapper wrapper(config.get());
+	eblob_config_test_wrapper config_wrapper;
+	eblob_wrapper wrapper(config_wrapper.config);
 	BOOST_REQUIRE(wrapper.get() != nullptr);
 
 	constexpr char data[] = "some data";

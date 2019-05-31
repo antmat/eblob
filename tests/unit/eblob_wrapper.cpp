@@ -10,6 +10,34 @@
 #include <vector>
 
 
+eblob_config_test_wrapper::eblob_config_test_wrapper() {
+	reset_dirs();
+	config.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS | EBLOB_AUTO_INDEXSORT;
+	config.sync = -2;
+	config.blob_size = EBLOB_BLOB_DEFAULT_BLOB_SIZE;
+	config.records_in_blob = EBLOB_BLOB_DEFAULT_RECORDS_IN_BLOB;
+	config.defrag_percentage = EBLOB_DEFAULT_DEFRAG_PERCENTAGE;
+	config.defrag_timeout = EBLOB_DEFAULT_DEFRAG_TIMEOUT;
+	config.index_block_size = EBLOB_INDEX_DEFAULT_BLOCK_SIZE;
+	config.index_block_bloom_length = EBLOB_INDEX_DEFAULT_BLOCK_BLOOM_LENGTH;
+	config.blob_size_limit = UINT64_MAX;
+	config.defrag_time = EBLOB_DEFAULT_DEFRAG_TIME;
+	config.defrag_splay = EBLOB_DEFAULT_DEFRAG_SPLAY;
+	config.periodic_timeout = EBLOB_DEFAULT_PERIODIC_THREAD_TIMEOUT;
+	config.stat_id = 12345;
+}
+
+void eblob_config_test_wrapper::reset_dirs() {
+	data_dir_template_ = "/tmp/eblob-test-XXXXXX";
+	data_dir_ = mkdtemp(&data_dir_template_.front());
+	data_path_ = data_dir_ + "/data";
+	log_path_ = data_dir_ + "/log.log";
+	logger_.reset(new ioremap::eblob::eblob_logger(log_path_.c_str(), EBLOB_LOG_DEBUG));
+	config.log = logger_->log();
+	config.file = const_cast<char*>(data_path_.c_str());
+	config.chunks_dir = const_cast<char*>(data_dir_.c_str());
+}
+
 item_t::item_t(uint64_t key_, const eblob_key &hashed_key_, const std::vector<char> &value_)
 : key(key_)
 , value(value_) {
@@ -22,42 +50,23 @@ bool item_t::operator< (const item_t &rhs) const {
 }
 
 
-eblob_wrapper::eblob_wrapper(eblob_config &config, bool cleanup_files)
-: default_config_(config)
+eblob_wrapper::eblob_wrapper(eblob_config config, bool cleanup_files)
+: config_(config)
 , cleanup_files_(cleanup_files) {
-	start();
+	backend_ = eblob_init(&config_);
 }
-
-
-void eblob_wrapper::start(eblob_config *config) {
-	if (config != nullptr)
-		backend_ = eblob_init(config);
-	else
-		backend_ = eblob_init(&default_config_);
-}
-
-
-void eblob_wrapper::restart(eblob_config *config) {
-	stop();
-	start(config);
-}
-
-
-void eblob_wrapper::stop() {
-	if (backend_) {
-		eblob_cleanup(backend_);
-		backend_ = nullptr;
-	}
-}
-
 
 eblob_wrapper::~eblob_wrapper() {
-	stop();
+	eblob_cleanup(backend_);
 	if (cleanup_files_) {
-		boost::filesystem::remove_all(default_config_.chunks_dir);
+		boost::filesystem::remove_all(config_.chunks_dir);
 	}
 }
 
+void eblob_wrapper::restart() {
+	eblob_cleanup(backend_);
+	backend_ = eblob_init(&config_);
+}
 
 eblob_backend *eblob_wrapper::get() {
 	return backend_;
@@ -70,7 +79,7 @@ const eblob_backend *eblob_wrapper::get() const {
 
 
 int eblob_wrapper::insert_item(item_t &item) {
-	return eblob_write(get(), &item.hashed_key, item.value.data(), /*offset*/ 0, item.value.size(), /*flags*/ 0);
+	return eblob_write(get(), &item.hashed_key, item.value.data(), /* offset */ 0, item.value.size(), /*flags*/ 0);
 }
 
 
@@ -78,30 +87,6 @@ int eblob_wrapper::remove_item(item_t &item) {
 	item.removed = true;
 	return eblob_remove_hashed(get(), &item.key, sizeof(item.key));
 }
-
-
-item_t item_generator::generate_item(uint64_t key) {
-	size_t datasize = 2 * (1 << 20);  // 2Mib
-	if (dist_(gen_) % 10 != 0) {  // 90% of probability
-		datasize = 1 + dist_(gen_) % (1 << 10);  // less or equal 1KiB
-	}
-
-	std::vector<char> data = generate_random_data(datasize);
-	struct eblob_key hashed_key;
-	eblob_hash(wrapper_.get(), hashed_key.id, sizeof(hashed_key.id), &key, sizeof(key));
-	return item_t(key, hashed_key, data);
-}
-
-
-std::vector<char> item_generator::generate_random_data(size_t datasize) {
-	std::vector<char> data(datasize);
-	for (auto &element : data) {
-		element = dist_(gen_) % 26 + 'a';
-	}
-
-	return data;
-}
-
 
 eblob_key hash(std::string key) {
 	eblob_key ret;

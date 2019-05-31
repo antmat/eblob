@@ -11,6 +11,24 @@
 #include <string>
 #include <vector>
 
+class eblob_config_test_wrapper {
+public:
+	eblob_config_test_wrapper();
+	eblob_config_test_wrapper(const eblob_config_test_wrapper &) = delete;
+	eblob_config_test_wrapper &operator=(const eblob_config_test_wrapper &) = delete;
+	eblob_config_test_wrapper(eblob_config_test_wrapper &&) = default;
+	eblob_config_test_wrapper &operator=(eblob_config_test_wrapper &&) = default;
+	void reset_dirs();
+
+public:
+	eblob_config config;
+private:
+	std::string data_dir_template_;
+	std::string data_dir_;
+	std::string data_path_;
+	std::string log_path_;
+	std::unique_ptr<ioremap::eblob::eblob_logger> logger_;
+};
 
 class item_t {
 public:
@@ -27,70 +45,17 @@ public:
 	std::vector<char> value;
 };
 
-
-class config_wrapper {
-public:
-	config_wrapper() {
-		data_dir_ = mkdtemp(&data_dir_template_.front());
-		data_path_ = data_dir_ + "/data";
-		log_path_ = data_dir_ + "/log";
-		logger_.reset(new ioremap::eblob::eblob_logger(log_path_.c_str(), EBLOB_LOG_DEBUG));
-
-		config_.blob_flags = EBLOB_L2HASH | EBLOB_DISABLE_THREADS | EBLOB_AUTO_INDEXSORT;
-		config_.sync = -2;
-		config_.log = logger_->log();
-		config_.file = const_cast<char*>(data_path_.c_str());
-		config_.blob_size = EBLOB_BLOB_DEFAULT_BLOB_SIZE;
-		config_.records_in_blob = EBLOB_BLOB_DEFAULT_RECORDS_IN_BLOB;
-		config_.defrag_percentage = EBLOB_DEFAULT_DEFRAG_PERCENTAGE;
-		config_.defrag_timeout = EBLOB_DEFAULT_DEFRAG_TIMEOUT;
-		config_.index_block_size = EBLOB_INDEX_DEFAULT_BLOCK_SIZE;
-		config_.index_block_bloom_length = EBLOB_INDEX_DEFAULT_BLOCK_BLOOM_LENGTH;
-		config_.blob_size_limit = UINT64_MAX;
-		config_.defrag_time = EBLOB_DEFAULT_DEFRAG_TIME;
-		config_.defrag_splay = EBLOB_DEFAULT_DEFRAG_SPLAY;
-		config_.periodic_timeout = EBLOB_DEFAULT_PERIODIC_THREAD_TIMEOUT;
-		config_.stat_id = 12345;
-		config_.chunks_dir = const_cast<char*>(data_dir_.c_str());
-	}
-
-	config_wrapper(config_wrapper &&rhs) {
-		data_dir_ = std::move(rhs.data_dir_);
-		data_path_ = std::move(rhs.data_path_);
-		log_path_ = std::move(rhs.log_path_);
-		logger_ = std::move(rhs.logger_);
-		config_ = rhs.config_;
-	};
-
-	eblob_config& get() {
-		return config_;
-	}
-
-	const eblob_config& get() const {
-		return config_;
-	}
-
-private:
-	std::string data_dir_template_ = "/tmp/eblob-test-XXXXXX";
-	std::string data_dir_;
-	std::string data_path_;
-	std::string log_path_;
-	std::unique_ptr<ioremap::eblob::eblob_logger> logger_;
-	eblob_config config_;
-};
-
-
 class eblob_wrapper {
 public:
-	explicit eblob_wrapper(eblob_config &config, bool cleanup_files = true);
+	explicit eblob_wrapper(eblob_config config, bool cleanup_files_ = true);
 
-	void start(eblob_config *config = nullptr);
+	eblob_wrapper(const eblob_wrapper &) = delete;
 
-	void restart(eblob_config *config = nullptr);
-
-	void stop();
+	eblob_wrapper &operator=(const eblob_wrapper &) = delete;
 
 	~eblob_wrapper();
+
+	void restart();
 
 	eblob_backend *get();
 
@@ -100,35 +65,74 @@ public:
 
 	int remove_item(item_t &item);
 
-public:
-	eblob_config &default_config_;
-
 private:
+	eblob_config config_;
 	eblob_backend *backend_ = nullptr;
 	bool cleanup_files_ = true;
 };
 
 
+constexpr uint64_t DEFAULT_RANDOM_SEED = 42;
+
+template<class D>
 class item_generator {
 public:
 
-	static constexpr uint64_t DEFAULT_RANDOM_SEED = 42;
-
-	explicit item_generator(eblob_wrapper &wrapper, uint64_t seed = DEFAULT_RANDOM_SEED)
+	item_generator(eblob_wrapper &wrapper, D d, uint64_t seed = DEFAULT_RANDOM_SEED)
 	: wrapper_(wrapper)
-	, gen_(std::mt19937(seed)) {
+	, gen_(std::mt19937(seed))
+	, dist_(std::move(d))
+	, data_dist_('a', 'a' + 26)
+	{
 	}
 
-	item_t generate_item(uint64_t key);
+	item_t generate_item(uint64_t key) {
+		size_t datasize = dist_(gen_);
+		std::vector<char> data = generate_random_data(datasize);
+		struct eblob_key hashed_key;
+		eblob_hash(wrapper_.get(), hashed_key.id, sizeof(hashed_key.id), &key, sizeof(key));
+		return item_t(key, hashed_key, data);
+	}
 
 private:
-	std::vector<char> generate_random_data(size_t datasize);
+	std::vector<char> generate_random_data(size_t datasize) {
+		std::vector<char> data(datasize);
+		for (auto &element : data) {
+			element = data_dist_(gen_);
+		}
 
+		return data;
+	}
 private:
 	eblob_wrapper &wrapper_;
 	std::mt19937 gen_;
-	std::uniform_int_distribution<unsigned> dist_;
+	D dist_;
+	std::uniform_int_distribution<char> data_dist_;
 };
 
+template<class D>
+item_generator<D>
+make_item_generator(eblob_wrapper &wrapper, D d, uint64_t seed) {
+	return item_generator<D>(wrapper, std::move(d), seed);
+}
+
+inline
+item_generator<std::uniform_int_distribution<unsigned>>
+make_big_item_generator(eblob_wrapper &wrapper, uint64_t seed = DEFAULT_RANDOM_SEED) {
+	// uniform distribution from 512KiB to 4MiB
+	std::uniform_int_distribution<unsigned> dist(2 << 19, 2 << 22);
+	return make_item_generator(wrapper, std::move(dist), seed);
+}
+
+inline
+item_generator<std::piecewise_constant_distribution<double>>
+make_default_item_generator(eblob_wrapper &wrapper, uint64_t seed = DEFAULT_RANDOM_SEED) {
+	// 90% for file less than 1KiB
+	// 10% for file 2MiB
+	std::vector<double> i{0, (1 << 10) + 1,  2 * (1 << 20), 2 * (1 << 20) + 1};
+	std::vector<double> w{  9,  0,  1};
+	std::piecewise_constant_distribution<> dist(i.begin(), i.end(), w.begin());
+	return item_generator<std::piecewise_constant_distribution<double>>(wrapper, dist, seed);
+}
 
 eblob_key hash(std::string key);
